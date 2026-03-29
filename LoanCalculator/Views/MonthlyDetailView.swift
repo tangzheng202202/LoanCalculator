@@ -55,7 +55,7 @@ struct MonthlyDetailView: View {
                     Button("完成") { dismiss() }
                 }
             }
-            .onChange(of: filteredSchedule.count) { _, _ in
+            .onChange(of: filteredSchedule.count) { _ in
                 currentPage = 0
             }
         }

@@ -14,6 +14,7 @@ struct ResultView: View {
     @State private var showingShareSheet = false
     @State private var exportURL: URL?
     @State private var exportErrorMessage: String?
+    @State private var showErrorAlert = false
 
     private let primaryColor = Color.mint
 
@@ -29,20 +30,13 @@ struct ResultView: View {
             }
             .navigationTitle("计算结果")
             .toolbar {
-                #if canImport(UIKit)
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") { dismiss() }
                 }
-                #else
-                ToolbarItem(placement: .automatic) {
-                    Button("完成") { dismiss() }
-                }
-                #endif
             }
             .sheet(isPresented: $showingMonthlyDetail) {
                 MonthlyDetailView(input: input)
             }
-#if canImport(UIKit)
             .sheet(isPresented: $showingShareSheet) {
                 if let exportURL {
                     ShareSheet(activityItems: [exportURL])
@@ -50,11 +44,7 @@ struct ResultView: View {
                     Text("导出失败，请重试。")
                 }
             }
-#endif
-            .alert("导出失败", isPresented: Binding<Bool>(
-                get: { exportErrorMessage != nil },
-                set: { if !$0 { exportErrorMessage = nil } }
-            )) {
+            .alert("导出失败", isPresented: $showErrorAlert) {
                 Button("好的") { }
             } message: {
                 Text(exportErrorMessage ?? "")
@@ -206,6 +196,7 @@ struct ResultView: View {
             showingShareSheet = true
         } else {
             exportErrorMessage = "无法生成导出文件，请检查存储权限或稍后重试。"
+            showErrorAlert = true
         }
     }
 }

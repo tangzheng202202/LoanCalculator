@@ -10,7 +10,7 @@ struct CalculatorView: View {
     @State private var showingResult = false
     @State private var result: LoanResult?
 
-    let primaryColor = Color.mint
+    private let primaryColor = Color.mint
 
     var body: some View {
         NavigationStack {
@@ -33,12 +33,33 @@ struct CalculatorView: View {
     private var inputSection: some View {
         VStack(spacing: 16) {
             repaymentMethodPicker
-            inputField(title: "贷款金额", value: $input.loanAmount, unit: "万元", range: 1...1000)
-            inputField(title: "贷款期限", value: Binding(
-                get: { Double(input.loanTerm) },
-                set: { input.loanTerm = Int($0) }
-            ), unit: "年", range: 1...30)
-            inputField(title: "年利率", value: $input.annualRate, unit: "%", range: 0.1...15)
+            inputField(
+                title: "贷款金额",
+                value: $input.loanAmount,
+                unit: "万元",
+                range: 1...1000,
+                precision: 1,
+                step: 1
+            )
+            inputField(
+                title: "贷款期限",
+                value: Binding(
+                    get: { Double(input.loanTerm) },
+                    set: { input.loanTerm = Int($0) }
+                ),
+                unit: "年",
+                range: 1...35,
+                precision: 0,
+                step: 1
+            )
+            inputField(
+                title: "年利率",
+                value: $input.annualRate,
+                unit: "%",
+                range: 0.1...15,
+                precision: 2,
+                step: 0.01
+            )
         }
     }
 
@@ -50,23 +71,38 @@ struct CalculatorView: View {
         }
         .pickerStyle(.segmented)
     }
-    
-    private func inputField(title: String, value: Binding<Double>, unit: String, range: ClosedRange<Double>) -> some View {
+
+    private func inputField(
+        title: String,
+        value: Binding<Double>,
+        unit: String,
+        range: ClosedRange<Double>,
+        precision: Int,
+        step: Double
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
                     .font(.headline)
                 Spacer()
-                Text("\(String(format: "%.1f", value.wrappedValue))\(unit)")
+                Text("\(formatValue(value.wrappedValue, precision: precision))\(unit)")
                     .font(.title3)
                     .foregroundColor(primaryColor)
             }
-            Slider(value: value, in: range, step: unit == "%" ? 0.05 : 1)
+            Slider(value: value, in: range, step: step)
                 .tint(primaryColor)
         }
         .padding()
         .background(containerBackground)
         .cornerRadius(16)
+    }
+
+    private func formatValue(_ value: Double, precision: Int) -> String {
+        if precision == 0 {
+            return String(format: "%.0f", value)
+        } else {
+            return String(format: "%.\(precision)f", value)
+        }
     }
 
     private var containerBackground: Color {
@@ -76,7 +112,7 @@ struct CalculatorView: View {
         return Color.secondary
         #endif
     }
-    
+
     private var calculateButton: some View {
         Button(action: {
             result = CalculationEngine.calculate(input: input)
