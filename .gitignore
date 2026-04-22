@@ -1,0 +1,11 @@
+# Xcode
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+
+# macOS
+.DS_Store
+
+# Project specific
+hermes-engineering-assessment.md
+skills/
