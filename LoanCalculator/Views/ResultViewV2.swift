@@ -26,6 +26,20 @@ struct ResultViewV2: View {
                 VStack(spacing: 24) {
                     mainResultCard
 
+                    if input.city == .beijing && input.loanType != .commercial {
+                        Text("北京公积金部分按所填方案本金测算月供，不代表获批贷款。按缴存年限核算的基本上限可能因政策上浮而提高，实际额度还须核验还款能力和申请条件。")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if input.city == .beijing && result.commercialPrincipal > 0 {
+                        Text("商业贷款利率为测算假设，具体报价以经办银行为准。")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if input.loanType == .combined {
                         splitResultCard
                     }
@@ -182,7 +196,7 @@ struct ResultViewV2: View {
                 }
 
                 if input.loanType != .housingFund {
-                    detailRow(title: "商业贷款利率", value: String(format: "%.2f%%", input.commercialRate * 100))
+                    detailRow(title: "商业贷款测算利率", value: String(format: "%.2f%%", input.commercialRate * 100))
                 }
             }
         }

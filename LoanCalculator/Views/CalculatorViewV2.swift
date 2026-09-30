@@ -25,6 +25,9 @@ struct CalculatorViewV2: View {
     @State private var housingFundMonthly: Double = 3000
     @State private var spouseHousingFund: Bool = false
     @State private var spouseHousingFundBalance: Double = 0
+    @State private var housingFundContributionMonths: Int = 0
+    @State private var spouseHousingFundContributionMonths: Int = 0
+    @State private var beijingPlannedHousingFundWan: Double = 0
 
     @State private var floatingBP: Double = -50
 
@@ -40,6 +43,17 @@ struct CalculatorViewV2: View {
     private var totalHousePrice: Double { houseArea * housePricePerSqm }
     private var downPayment: Double { totalHousePrice * (downPaymentPercent / 100) }
     private var loanAmount: Double { totalHousePrice - downPayment }
+    private var minimumDownPaymentPercent: Double {
+        city.minDownPaymentRatio(loanType: loanType, houseType: houseType) * 100
+    }
+
+    private var beijingBasicCap: Double? {
+        city.beijingBasicHousingFundCap(
+            contributionMonths: housingFundContributionMonths,
+            spouseContributionMonths: spouseHousingFund ? spouseHousingFundContributionMonths : nil,
+            houseType: houseType
+        )
+    }
 
     private var housingFundLoanable: Double {
         guard housingFundEnabled else { return 0 }
@@ -103,9 +117,14 @@ struct CalculatorViewV2: View {
         }
         .onChange(of: city) { newCity in
             floatingBP = computeDefaultBP(for: newCity, houseType: houseType)
+            downPaymentPercent = max(downPaymentPercent, minimumDownPaymentPercent)
         }
         .onChange(of: houseType) { newType in
             floatingBP = computeDefaultBP(for: city, houseType: newType)
+            downPaymentPercent = max(downPaymentPercent, minimumDownPaymentPercent)
+        }
+        .onChange(of: loanType) { _ in
+            downPaymentPercent = max(downPaymentPercent, minimumDownPaymentPercent)
         }
     }
 
@@ -135,8 +154,13 @@ struct CalculatorViewV2: View {
                 }
             }
             .pickerStyle(.menu)
-            Text("公积金最高可贷 \(Int(city.maxHousingFundLoan)) 万")
-                .font(.caption).foregroundColor(.secondary)
+            if city == .beijing {
+                Text("北京公积金基本封顶：单人首套120万／二套100万，双人首套240万／二套200万；可按政策上浮，实际额度由主管部门审核")
+                    .font(.caption).foregroundColor(.secondary)
+            } else {
+                Text("公积金最高可贷 \(Int(city.maxHousingFundLoan)) 万")
+                    .font(.caption).foregroundColor(.secondary)
+            }
         }
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
@@ -201,7 +225,9 @@ struct CalculatorViewV2: View {
                 Text("%")
                     .foregroundColor(.secondary)
             }
-            Slider(value: $downPaymentPercent, in: 20...99, step: 1)
+            Text("该贷款类型最低首付 \(Int(minimumDownPaymentPercent))%")
+                .font(.caption).foregroundColor(.secondary)
+            Slider(value: $downPaymentPercent, in: minimumDownPaymentPercent...99, step: 1)
                 .tint(primaryColor)
 
             Divider()
@@ -261,37 +287,66 @@ struct CalculatorViewV2: View {
             }
 
             if housingFundEnabled {
-                HStack {
-                    Text("账户余额")
-                    Spacer()
-                    TextField("50000", value: $housingFundBalance, format: .number)
-                        .keyboardType(.numberPad)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                        .multilineTextAlignment(.trailing)
-                    Text("元")
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("月缴存")
-                    Spacer()
-                    TextField("3000", value: $housingFundMonthly, format: .number)
-                        .keyboardType(.numberPad)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
-                        .multilineTextAlignment(.trailing)
-                    Text("元")
-                        .foregroundColor(.secondary)
-                }
-
-                Toggle("配偶共用", isOn: $spouseHousingFund)
-
-                if spouseHousingFund {
+                if city == .beijing {
                     HStack {
-                        Text("配偶余额")
+                        Text("本人缴存月数")
                         Spacer()
-                        TextField("0", value: $spouseHousingFundBalance, format: .number)
+                        TextField("例如 36", value: $housingFundContributionMonths, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 90)
+                            .multilineTextAlignment(.trailing)
+                        Text("月").foregroundColor(.secondary)
+                    }
+
+                    Toggle("配偶也是缴存人", isOn: $spouseHousingFund)
+                    if spouseHousingFund {
+                        HStack {
+                            Text("配偶缴存月数")
+                            Spacer()
+                            TextField("例如 36", value: $spouseHousingFundContributionMonths, format: .number)
+                                .keyboardType(.numberPad)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 90)
+                                .multilineTextAlignment(.trailing)
+                            Text("月").foregroundColor(.secondary)
+                        }
+                    }
+
+                    if let beijingBasicCap {
+                        HStack {
+                            Text("按年限核算的基本上限")
+                            Spacer()
+                            Text("\(Int(beijingBasicCap / 10000)) 万")
+                                .font(.headline).foregroundColor(.green)
+                        }
+                    } else {
+                        Text("填写本人及已勾选配偶的缴存月数，可查看基本上限")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+
+                    if loanType == .combined {
+                        HStack {
+                            Text("拟用公积金本金")
+                            Spacer()
+                            TextField("0", value: $beijingPlannedHousingFundWan, format: .number)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 100)
+                                .multilineTextAlignment(.trailing)
+                            Text("万").foregroundColor(.secondary)
+                        }
+                    }
+
+                    Text("月供按拟用本金测算；基本上限不含政策上浮，实际可贷额还受还款能力及审批条件影响。")
+                        .font(.caption).foregroundColor(.secondary)
+                    Link("查看北京公积金政策", destination: URL(string: "https://gjj.beijing.gov.cn/web/zwgk61/2024zcwj/436433464/436433467/744089355/index.html")!)
+                        .font(.caption)
+                } else {
+                    HStack {
+                        Text("账户余额")
+                        Spacer()
+                        TextField("50000", value: $housingFundBalance, format: .number)
                             .keyboardType(.numberPad)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
@@ -299,18 +354,46 @@ struct CalculatorViewV2: View {
                         Text("元")
                             .foregroundColor(.secondary)
                     }
+
+                    HStack {
+                        Text("月缴存")
+                        Spacer()
+                        TextField("3000", value: $housingFundMonthly, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                        Text("元")
+                            .foregroundColor(.secondary)
+                    }
+
+                    Toggle("配偶共用", isOn: $spouseHousingFund)
+
+                    if spouseHousingFund {
+                        HStack {
+                            Text("配偶余额")
+                            Spacer()
+                            TextField("0", value: $spouseHousingFundBalance, format: .number)
+                                .keyboardType(.numberPad)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 100)
+                                .multilineTextAlignment(.trailing)
+                            Text("元")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Divider()
+
+                    HStack {
+                        Text("可贷额度")
+                        Spacer()
+                        Text("\(Int(min(housingFundLoanable, loanAmount) / 10000)) 万")
+                            .font(.headline).foregroundColor(.green)
+                    }
                 }
 
-                Divider()
-
-                HStack {
-                    Text("可贷额度")
-                    Spacer()
-                    Text("\(Int(min(housingFundLoanable, loanAmount) / 10000)) 万")
-                        .font(.headline).foregroundColor(.green)
-                }
-
-                Text("公积金利率：\(String(format: "%.2f%%", (houseType == .first ? city.housingFundRateFirst : city.housingFundRateSecond) * 100))")
+                Text("公积金利率：\(String(format: "%.2f%%", city.housingFundRate(houseType: houseType, loanTerm: loanTerm) * 100))")
                     .font(.caption).foregroundColor(.secondary)
             }
         }
@@ -324,14 +407,14 @@ struct CalculatorViewV2: View {
             Text("商业贷款").font(.headline)
 
             HStack {
-                Text("LPR基准")
+                Text("5年期以上LPR测算基准")
                 Spacer()
                 Text("3.5%")
                     .foregroundColor(.secondary)
             }
 
             HStack {
-                Text("BP浮动")
+                Text("BP浮动假设")
                 Spacer()
                 TextField("-50", value: $floatingBP, format: .number)
                     .keyboardType(.numberPad)
@@ -347,10 +430,14 @@ struct CalculatorViewV2: View {
             Divider()
 
             HStack {
-                Text("实际利率")
+                Text("测算利率")
                 Spacer()
                 Text("\(commercialRate * 100, specifier: "%.2f")%")
                     .font(.headline).foregroundColor(.orange)
+            }
+            if city == .beijing {
+                Text("商贷利率以经办银行报价为准，当前 BP 仅为测算假设。")
+                    .font(.caption).foregroundColor(.secondary)
             }
         }
         .padding()
@@ -407,6 +494,9 @@ struct CalculatorViewV2: View {
         input.housingFundMonthly = housingFundMonthly
         input.spouseHousingFund = spouseHousingFund
         input.spouseHousingFundBalance = spouseHousingFundBalance
+        input.housingFundContributionMonths = housingFundContributionMonths
+        input.spouseHousingFundContributionMonths = spouseHousingFundContributionMonths
+        input.beijingPlannedHousingFundPrincipal = beijingPlannedHousingFundWan * 10000
         input.floatingRatio = floatingBP / 10000
         return input
     }

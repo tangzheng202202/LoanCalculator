@@ -11,7 +11,8 @@ import UIKit
 
 class ExportManager {
     static func exportToCSV(input: LoanInputV2, result: LoanResultV2) -> URL? {
-        let filename = "贷款明细_\(Int(result.loanAmount.rounded()))元_\(input.loanTerm)年.csv"
+        let prefix = input.city == .beijing && result.housingFundPrincipal > 0 ? "方案测算明细" : "贷款明细"
+        let filename = "\(prefix)_\(Int(result.loanAmount.rounded()))元_\(input.loanTerm)年.csv"
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
 
         var csv = "月份,月供,本金,利息,剩余本金\n"
@@ -37,7 +38,8 @@ class ExportManager {
 
 #if canImport(UIKit)
     static func exportToPDF(input: LoanInputV2, result: LoanResultV2) -> URL? {
-        let filename = "贷款明细_\(Int(result.loanAmount.rounded()))元_\(input.loanTerm)年.pdf"
+        let prefix = input.city == .beijing && result.housingFundPrincipal > 0 ? "方案测算明细" : "贷款明细"
+        let filename = "\(prefix)_\(Int(result.loanAmount.rounded()))元_\(input.loanTerm)年.pdf"
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
 
         let pageSize = CGSize(width: 595, height: 842)
@@ -72,12 +74,18 @@ class ExportManager {
                 addLine("贷款计算结果", attributes: titleAttributes)
                 addLine("", attributes: normalAttributes)
                 addLine("贷款金额：\(Formatters.wanYuan(result.loanAmount / 10000))", attributes: normalAttributes)
+                if input.city == .beijing && result.housingFundPrincipal > 0 {
+                    addLine("北京公积金部分为方案测算本金，不代表获批额度；实际额度以审批为准。", attributes: normalAttributes)
+                }
                 addLine("贷款期限：\(input.loanTerm)年", attributes: normalAttributes)
                 if result.housingFundPrincipal > 0 {
                     addLine("公积金利率：\(String(format: "%.2f%%", input.housingFundRate * 100))", attributes: normalAttributes)
                 }
                 if result.commercialPrincipal > 0 {
-                    addLine("商业贷款利率：\(String(format: "%.2f%%", input.commercialRate * 100))", attributes: normalAttributes)
+                    addLine("商业贷款测算利率：\(String(format: "%.2f%%", input.commercialRate * 100))", attributes: normalAttributes)
+                    if input.city == .beijing {
+                        addLine("商业贷款实际利率以经办银行报价为准。", attributes: normalAttributes)
+                    }
                 }
                 addLine("月供：\(Formatters.currency(result.totalMonthlyPayment))", attributes: normalAttributes)
                 addLine("总还款：\(Formatters.currency(result.totalPayment))", attributes: normalAttributes)

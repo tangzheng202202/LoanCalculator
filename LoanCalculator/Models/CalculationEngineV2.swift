@@ -202,22 +202,7 @@ class CalculationEngineV2 {
     
     /// 计算公积金和商贷金额
     private static func calculateLoanAmounts(input: LoanInputV2) -> (housingFund: Double, commercial: Double) {
-        let totalLoan = input.loanAmount
-        let housingFundLoanable = input.housingFundLoanable
-        
-        switch input.loanType {
-        case .commercial:
-            return (0, totalLoan)
-            
-        case .housingFund:
-            let hfLoan = min(housingFundLoanable, totalLoan)
-            return (hfLoan, 0)
-            
-        case .combined:
-            let hfLoan = min(housingFundLoanable, totalLoan)
-            let cmLoan = totalLoan - hfLoan
-            return (hfLoan, cmLoan)
-        }
+        input.autoCalculateLoanAmounts()
     }
     
     static func calcLoan(principal: Double, annualRate: Double, months: Int, method: RepaymentMethod) -> (monthlyPayment: Double, totalPayment: Double, totalInterest: Double) {
@@ -315,6 +300,9 @@ class CalculationEngineV2 {
         newInput.housingFundMonthly = originalInput.housingFundMonthly
         newInput.spouseHousingFund = originalInput.spouseHousingFund
         newInput.spouseHousingFundBalance = originalInput.spouseHousingFundBalance
+        newInput.housingFundContributionMonths = originalInput.housingFundContributionMonths
+        newInput.spouseHousingFundContributionMonths = originalInput.spouseHousingFundContributionMonths
+        newInput.beijingPlannedHousingFundPrincipal = originalInput.beijingPlannedHousingFundPrincipal
         newInput.lprBase = originalInput.lprBase
         newInput.floatingRatio = originalInput.floatingRatio
         let newSchedule = schedule(input: newInput)

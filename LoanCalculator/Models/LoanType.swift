@@ -72,6 +72,7 @@ enum City: String, CaseIterable, Identifiable {
     /// 公积金贷款利率（5年以上）
     var housingFundRateFirst: Double {
         switch self {
+        case .beijing: return 0.026
         case .chengdu, .chongqing: return 0.026  // 成都重庆2026年优惠利率2.6%
         default: return 0.0285 // 全国统一2.85%
         }
@@ -90,6 +91,13 @@ enum City: String, CaseIterable, Identifiable {
         case .chengdu, .chongqing: return 0.021  // 成都重庆2.1%
         default: return 0.021  // 全国统一2.1%
         }
+    }
+
+    func housingFundRate(houseType: HouseType, loanTerm: Int) -> Double {
+        if self == .beijing && loanTerm <= 5 {
+            return houseType == .first ? 0.021 : 0.02525
+        }
+        return houseType == .first ? housingFundRateFirst : housingFundRateSecond
     }
     
     /// 首付比例要求（首套）
@@ -114,6 +122,13 @@ enum City: String, CaseIterable, Identifiable {
         case .chengdu: return 0.30  // 30%
         case .chongqing: return 0.30 // 30%
         }
+    }
+
+    func minDownPaymentRatio(loanType: LoanType, houseType: HouseType) -> Double {
+        if self == .beijing && loanType == .commercial {
+            return houseType == .first ? 0.15 : 0.20
+        }
+        return houseType == .first ? minDownPaymentRatioFirst : minDownPaymentRatioSecond
     }
     
     /// 最高贷款成数（首套）
@@ -143,7 +158,7 @@ enum City: String, CaseIterable, Identifiable {
     /// 额度计算倍数
     var balanceMultiplier: Double {
         switch self {
-        case .beijing: return 15   // 每缴1年=15万
+        case .beijing: return 0   // 北京不按账户余额核算贷款额度
         case .shanghai: return 15  // 余额×倍数
         case .guangzhou: return 8   // 余额×8+月缴×系数
         case .shenzhen: return 14  // 存贷挂钩
@@ -195,6 +210,8 @@ enum City: String, CaseIterable, Identifiable {
     
     /// 计算公积金可贷额度。账户余额和房价传入值均为元，政策上限为万元。
     func calculateHousingFundLoanable(balance: Double, spouseBalance: Double = 0, housePrice: Double, houseType: HouseType) -> Double {
+        // 北京现行规则按缴存年限计算基本额度；旧余额接口必须失效，不能误作获批额度。
+        guard self != .beijing else { return 0 }
         let totalBalance = balance + spouseBalance
         let maxByBalance = totalBalance * balanceMultiplier
         let maxByPrice = housePrice * (houseType == .first ? maxLoanRatioFirst : maxLoanRatioSecond)
@@ -202,6 +219,27 @@ enum City: String, CaseIterable, Identifiable {
         let maxPolicyAmount = maxByPolicy * 10000
         
         return min(maxByBalance, min(maxByPrice, maxPolicyAmount))
+    }
+
+    /// 北京按缴存年限核算的基本上限（元），不包含政策上浮与还款能力审核。
+    func beijingBasicHousingFundCap(
+        contributionMonths: Int,
+        spouseContributionMonths: Int?,
+        houseType: HouseType
+    ) -> Double? {
+        guard self == .beijing, contributionMonths > 0 else { return nil }
+        if let spouseContributionMonths, spouseContributionMonths <= 0 { return nil }
+        let longestMonths = max(contributionMonths, spouseContributionMonths ?? 0)
+        let years = (longestMonths - 1) / 12 + 1
+        let dualContributor = spouseContributionMonths != nil
+        let annualAmount = dualContributor ? 400_000.0 : 200_000.0
+        let ceiling: Double
+        if dualContributor {
+            ceiling = houseType == .first ? 2_400_000 : 2_000_000
+        } else {
+            ceiling = houseType == .first ? 1_200_000 : 1_000_000
+        }
+        return min(Double(years) * annualAmount, ceiling)
     }
     
     /// 计算商贷利率
