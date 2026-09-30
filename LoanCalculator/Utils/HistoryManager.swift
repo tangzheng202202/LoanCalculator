@@ -61,7 +61,14 @@ class HistoryManager: ObservableObject {
 
     /// 添加一条新记录
     func addRecord(input: LoanInputV2, result: LoanResultV2) {
-        let item = LoanHistoryItem(
+        let item = Self.makeItem(input: input, result: result)
+        items.insert(item, at: 0)
+        trim()
+        save()
+    }
+
+    static func makeItem(input: LoanInputV2, result: LoanResultV2) -> LoanHistoryItem {
+        LoanHistoryItem(
             id: UUID(),
             createdAt: Date(),
             loanType: input.loanType.rawValue,
@@ -72,37 +79,11 @@ class HistoryManager: ObservableObject {
             downPaymentPercent: input.downPaymentRatio * 100,
             loanTerm: input.loanTerm,
             repaymentMethod: input.repaymentMethod.rawValue,
-            loanAmount: input.loanAmount,
+            loanAmount: result.loanAmount,
             monthlyPayment: result.totalMonthlyPayment,
             totalInterest: result.totalInterest,
             totalPayment: result.totalPayment
         )
-        items.insert(item, at: 0)
-        trim()
-        save()
-    }
-
-    /// 添加 V1 单贷款记录
-    func addRecord(input: LoanInput, result: LoanResult) {
-        let item = LoanHistoryItem(
-            id: UUID(),
-            createdAt: Date(),
-            loanType: "商业贷款",
-            city: "-",
-            houseType: "-",
-            houseArea: 0,
-            housePricePerSqm: 0,
-            downPaymentPercent: 0,
-            loanTerm: input.loanTerm,
-            repaymentMethod: input.repaymentMethod.rawValue,
-            loanAmount: input.amountInYuan,
-            monthlyPayment: result.monthlyPayment,
-            totalInterest: result.totalInterest,
-            totalPayment: result.totalPayment
-        )
-        items.insert(item, at: 0)
-        trim()
-        save()
     }
 
     /// 删除一条记录

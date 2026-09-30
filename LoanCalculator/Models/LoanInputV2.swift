@@ -30,10 +30,13 @@ class LoanInputV2: ObservableObject {
     @Published var housingFundMonthly: Double = 3000   // 月缴存额（元）
     @Published var spouseHousingFund: Bool = false     // 配偶是否共用公积金
     @Published var spouseHousingFundBalance: Double = 0 // 配偶公积金余额
+    @Published var housingFundContributionMonths: Int = 0 // 北京：本人累计缴存月数
+    @Published var spouseHousingFundContributionMonths: Int = 0 // 北京：配偶累计缴存月数
+    @Published var beijingPlannedHousingFundPrincipal: Double = 0 // 北京组合贷：用户拟用公积金本金
     
     // MARK: - 商业贷款信息
     @Published var lprBase: Double = 0.035         // LPR基准利率（5年期3.5%）
-    @Published var floatingRatio: Double = -0.0060 // 浮动比例（-60BP = -0.6%）
+    @Published var floatingRatio: Double? = nil // nil 时沿用城市默认测算假设；界面可覆盖 BP
     
     // MARK: - 验证错误信息
     @Published var validationErrors: [String] = []
@@ -54,24 +57,35 @@ class LoanInputV2: ObservableObject {
     }
     
     var housingFundLoanable: Double {
-        city.calculateHousingFundLoanable(
+        guard housingFundEnabled else { return 0 }
+        return max(0, city.calculateHousingFundLoanable(
             balance: housingFundBalance,
             spouseBalance: spouseHousingFund ? spouseHousingFundBalance : 0,
             housePrice: totalHousePrice,
+            houseType: houseType
+        ))
+    }
+
+    var beijingBasicHousingFundCap: Double? {
+        guard housingFundEnabled else { return nil }
+        return city.beijingBasicHousingFundCap(
+            contributionMonths: housingFundContributionMonths,
+            spouseContributionMonths: spouseHousingFund ? spouseHousingFundContributionMonths : nil,
             houseType: houseType
         )
     }
     
     var housingFundRate: Double {
-        houseType == .first ? city.housingFundRateFirst : city.housingFundRateSecond
+        city.housingFundRate(houseType: houseType, loanTerm: loanTerm)
     }
     
     var commercialRate: Double {
-        city.calculateCommercialRate(houseType: houseType)
+        let floating = floatingRatio ?? (houseType == .first ? city.commercialFloatingFirst : city.commercialFloatingSecond)
+        return lprBase + floating
     }
     
     var minDownPaymentRatio: Double {
-        houseType == .first ? city.minDownPaymentRatioFirst : city.minDownPaymentRatioSecond
+        city.minDownPaymentRatio(loanType: loanType, houseType: houseType)
     }
     
     // MARK: - 验证方法
@@ -98,12 +112,35 @@ class LoanInputV2: ObservableObject {
         if loanTerm < 1 || loanTerm > 35 {
             validationErrors.append("贷款期限应在1-35年之间")
         }
-        
-        // 公积金余额验证
-        if housingFundEnabled && housingFundBalance < 0 {
-            validationErrors.append("公积金账户余额不能为负")
+        if loanType != .housingFund && (!commercialRate.isFinite || commercialRate < 0 || commercialRate > 1) {
+            validationErrors.append("商业贷款测算利率应在0%-100%之间")
         }
-        
+
+        if city == .beijing {
+            if loanType != .commercial && housingFundEnabled &&
+                (housingFundContributionMonths < 0 || (spouseHousingFund && spouseHousingFundContributionMonths < 0)) {
+                validationErrors.append("公积金缴存月数不能为负")
+            }
+            if loanType == .housingFund && !housingFundEnabled {
+                validationErrors.append("公积金贷款须启用公积金")
+            }
+            if loanType == .combined && housingFundEnabled &&
+                (!beijingPlannedHousingFundPrincipal.isFinite || beijingPlannedHousingFundPrincipal < 0 || beijingPlannedHousingFundPrincipal - loanAmount > 0.01) {
+                validationErrors.append("拟用公积金本金应在0元至贷款金额之间")
+            }
+        } else {
+            if housingFundEnabled && housingFundBalance < 0 {
+                validationErrors.append("公积金账户余额不能为负")
+            }
+            if housingFundEnabled && spouseHousingFund && spouseHousingFundBalance < 0 {
+                validationErrors.append("配偶公积金账户余额不能为负")
+            }
+            // 其他城市沿用既有估算规则，不将缺口记为已借本金。
+            if loanType == .housingFund && loanAmount - housingFundLoanable > 0.01 {
+                validationErrors.append("公积金可贷额度不足以覆盖贷款金额，请提高首付或选择组合贷款")
+            }
+        }
+
         return validationErrors.isEmpty
     }
     
@@ -116,10 +153,18 @@ class LoanInputV2: ObservableObject {
             return (0, totalLoan)
             
         case .housingFund:
+            if city == .beijing {
+                return (housingFundEnabled ? totalLoan : 0, 0)
+            }
             let hfLoan = min(housingFundLoanable, totalLoan)
             return (hfLoan, 0)
             
         case .combined:
+            if city == .beijing {
+                let planned = housingFundEnabled && beijingPlannedHousingFundPrincipal.isFinite
+                    ? min(max(0, beijingPlannedHousingFundPrincipal), totalLoan) : 0
+                return (planned, totalLoan - planned)
+            }
             let hfLoan = min(housingFundLoanable, totalLoan)
             let cmLoan = totalLoan - hfLoan
             return (hfLoan, cmLoan)

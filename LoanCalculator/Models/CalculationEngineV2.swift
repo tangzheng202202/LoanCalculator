@@ -29,7 +29,7 @@ class CalculationEngineV2 {
             commercialTotalPayment: 0,
             commercialPrincipal: cmLoan,
             loanTerm: input.loanTerm,
-            loanAmount: input.loanAmount,
+            loanAmount: hfLoan + cmLoan,
             loanType: input.loanType,
             city: input.city,
             commercialRate: input.commercialRate
@@ -116,7 +116,7 @@ class CalculationEngineV2 {
     }
     
     // MARK: - 私有辅助类型
-    private struct ScheduleItem {
+    struct ScheduleItem {
         var payment: Double
         var principal: Double
         var interest: Double
@@ -124,17 +124,22 @@ class CalculationEngineV2 {
     }
     
     // MARK: - 生成单一部分的月度明细
-    private static func generateSchedule(principal: Double, monthlyRate: Double, months: Int, method: RepaymentMethod) -> [ScheduleItem] {
-        guard principal > 0 else {
-            return Array(repeating: ScheduleItem(payment: 0, principal: 0, interest: 0, remaining: 0), count: months)
+    static func generateSchedule(principal: Double, monthlyRate: Double, months: Int, method: RepaymentMethod) -> [ScheduleItem] {
+        guard principal > 0 && months > 0 else {
+            return Array(repeating: ScheduleItem(payment: 0, principal: 0, interest: 0, remaining: 0), count: max(0, months))
         }
         
         var items: [ScheduleItem] = []
         
         switch method {
         case .equalPayment:
-            let power = pow(1 + monthlyRate, Double(months))
-            let monthlyPayment = principal * monthlyRate * power / (power - 1)
+            let monthlyPayment: Double
+            if monthlyRate == 0 {
+                monthlyPayment = principal / Double(months)
+            } else {
+                let power = pow(1 + monthlyRate, Double(months))
+                monthlyPayment = principal * monthlyRate * power / (power - 1)
+            }
             var remaining = principal
             
             for month in 1...months {
@@ -197,36 +202,10 @@ class CalculationEngineV2 {
     
     /// 计算公积金和商贷金额
     private static func calculateLoanAmounts(input: LoanInputV2) -> (housingFund: Double, commercial: Double) {
-        let totalLoan = input.loanAmount
-        let housingFundLoanable = calculateHousingFundLoanable(input: input)
-        
-        switch input.loanType {
-        case .commercial:
-            return (0, totalLoan)
-            
-        case .housingFund:
-            let hfLoan = min(housingFundLoanable, totalLoan)
-            return (hfLoan, 0)
-            
-        case .combined:
-            let hfLoan = min(housingFundLoanable, totalLoan)
-            let cmLoan = totalLoan - hfLoan
-            return (hfLoan, cmLoan)
-        }
+        input.autoCalculateLoanAmounts()
     }
     
-    /// 计算公积金可贷额度
-    private static func calculateHousingFundLoanable(input: LoanInputV2) -> Double {
-        let balance = input.housingFundBalance + (input.spouseHousingFund ? input.spouseHousingFundBalance : 0)
-        return input.city.calculateHousingFundLoanable(
-            balance: balance,
-            spouseBalance: input.spouseHousingFund ? input.spouseHousingFundBalance : 0,
-            housePrice: input.totalHousePrice,
-            houseType: input.houseType
-        )
-    }
-    
-    private static func calcLoan(principal: Double, annualRate: Double, months: Int, method: RepaymentMethod) -> (monthlyPayment: Double, totalPayment: Double, totalInterest: Double) {
+    static func calcLoan(principal: Double, annualRate: Double, months: Int, method: RepaymentMethod) -> (monthlyPayment: Double, totalPayment: Double, totalInterest: Double) {
         guard principal > 0 && months > 0 else {
             return (0, 0, 0)
         }
@@ -235,8 +214,13 @@ class CalculationEngineV2 {
         
         switch method {
         case .equalPayment:
-            let power = pow(1 + monthlyRate, Double(months))
-            let monthlyPayment = principal * monthlyRate * power / (power - 1)
+            let monthlyPayment: Double
+            if monthlyRate == 0 {
+                monthlyPayment = principal / Double(months)
+            } else {
+                let power = pow(1 + monthlyRate, Double(months))
+                monthlyPayment = principal * monthlyRate * power / (power - 1)
+            }
             let totalPayment = monthlyPayment * Double(months)
             let totalInterest = totalPayment - principal
             return (monthlyPayment, totalPayment, totalInterest)
@@ -316,6 +300,9 @@ class CalculationEngineV2 {
         newInput.housingFundMonthly = originalInput.housingFundMonthly
         newInput.spouseHousingFund = originalInput.spouseHousingFund
         newInput.spouseHousingFundBalance = originalInput.spouseHousingFundBalance
+        newInput.housingFundContributionMonths = originalInput.housingFundContributionMonths
+        newInput.spouseHousingFundContributionMonths = originalInput.spouseHousingFundContributionMonths
+        newInput.beijingPlannedHousingFundPrincipal = originalInput.beijingPlannedHousingFundPrincipal
         newInput.lprBase = originalInput.lprBase
         newInput.floatingRatio = originalInput.floatingRatio
         let newSchedule = schedule(input: newInput)

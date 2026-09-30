@@ -32,6 +32,17 @@ final class LoanCalculatorUITests: XCTestCase {
     }
 
     @MainActor
+    func testBeijingShowsYearsAndPlannedPrincipalInsteadOfBalance() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["本人缴存月数"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["拟用公积金本金"].exists)
+        XCTAssertTrue(app.staticTexts["该贷款类型最低首付 20%"].exists)
+        XCTAssertFalse(app.staticTexts["账户余额"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
