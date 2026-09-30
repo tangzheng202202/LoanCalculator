@@ -6,10 +6,52 @@
 //  2026-03-31
 //
 
+import Foundation
 import Testing
 @testable import LoanCalculator
 
 struct LoanCalculatorV2Tests {
+
+    @Test func testCSVExportUsesActualV2PrincipalAndSchedule() throws {
+        let input = LoanInputV2()
+        input.loanType = .housingFund
+        input.housingFundEnabled = true
+        input.housingFundBalance = 1000
+        input.loanTerm = 1
+        let result = CalculationEngineV2.calculate(input: input)
+
+        let url = try #require(ExportManager.exportToCSV(input: input, result: result))
+        defer { try? FileManager.default.removeItem(at: url) }
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        let firstMonth = try #require(CalculationEngineV2.schedule(input: input).first)
+
+        #expect(result.loanAmount == 15000)
+        #expect(url.lastPathComponent.contains("15000元"))
+        #expect(lines.count == 13)
+        #expect(lines[0] == "月份,月供,本金,利息,剩余本金")
+        #expect(lines[1] == Substring(String(format: "1,%.2f,%.2f,%.2f,%.2f",
+                                              firstMonth.totalPayment,
+                                              firstMonth.totalPrincipal,
+                                              firstMonth.totalInterest,
+                                              firstMonth.remainingPrincipal)))
+    }
+
+    @Test func testPDFExportCreatesV2Document() throws {
+        let input = LoanInputV2()
+        input.loanType = .combined
+        input.housingFundEnabled = true
+        input.housingFundBalance = 1000
+        input.loanTerm = 1
+        let result = CalculationEngineV2.calculate(input: input)
+
+        let url = try #require(ExportManager.exportToPDF(input: input, result: result))
+        defer { try? FileManager.default.removeItem(at: url) }
+        let data = try Data(contentsOf: url)
+
+        #expect(url.lastPathComponent.contains("\(Int(result.loanAmount))元"))
+        #expect(data.count > 100)
+        #expect(data.prefix(4) == Data("%PDF".utf8))
+    }
 
     // MARK: - 组合贷款测试
     @Test func testCombinedLoan_Basic() {

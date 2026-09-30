@@ -16,7 +16,9 @@ iOS/macOS SwiftUI 贷款计算工具，支持多种还款方式计算与导出�
 
 ```bash
 cd LoanCalculator
-xcodebuild test -scheme LoanCalculator -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -project LoanCalculator.xcodeproj -scheme LoanCalculator \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+  -only-testing:LoanCalculatorTests CODE_SIGNING_ALLOWED=NO
 ```
 
 ## 技术栈

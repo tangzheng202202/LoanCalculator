@@ -86,29 +86,6 @@ class HistoryManager: ObservableObject {
         )
     }
 
-    /// 添加 V1 单贷款记录
-    func addRecord(input: LoanInput, result: LoanResult) {
-        let item = LoanHistoryItem(
-            id: UUID(),
-            createdAt: Date(),
-            loanType: "商业贷款",
-            city: "-",
-            houseType: "-",
-            houseArea: 0,
-            housePricePerSqm: 0,
-            downPaymentPercent: 0,
-            loanTerm: input.loanTerm,
-            repaymentMethod: input.repaymentMethod.rawValue,
-            loanAmount: input.amountInYuan,
-            monthlyPayment: result.monthlyPayment,
-            totalInterest: result.totalInterest,
-            totalPayment: result.totalPayment
-        )
-        items.insert(item, at: 0)
-        trim()
-        save()
-    }
-
     /// 删除一条记录
     func deleteRecord(_ item: LoanHistoryItem) {
         items.removeAll { $0.id == item.id }
