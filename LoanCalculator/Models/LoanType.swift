@@ -193,10 +193,10 @@ enum City: String, CaseIterable, Identifiable {
         }
     }
     
-    /// 计算公积金可贷额度
+    /// 计算公积金可贷额度。账户余额和房价传入值均为元，政策上限为万元。
     func calculateHousingFundLoanable(balance: Double, spouseBalance: Double = 0, housePrice: Double, houseType: HouseType) -> Double {
         let totalBalance = balance + spouseBalance
-        let maxByBalance = totalBalance * balanceMultiplier * 10000
+        let maxByBalance = totalBalance * balanceMultiplier
         let maxByPrice = housePrice * (houseType == .first ? maxLoanRatioFirst : maxLoanRatioSecond)
         let maxByPolicy = houseType == .first ? maxHousingFundLoanFirst : maxHousingFundLoanSecond
         let maxPolicyAmount = maxByPolicy * 10000

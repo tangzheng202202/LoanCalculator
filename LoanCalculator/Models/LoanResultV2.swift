@@ -28,7 +28,7 @@ struct LoanResultV2 {
     
     // MARK: - 统计信息
     var loanTerm: Int                     // 贷款期限
-    var loanAmount: Double               // 贷款总额
+    var loanAmount: Double               // 实际计算的贷款本金（公积金 + 商贷）
     var loanType: LoanType               // 贷款类型
     var city: City                       // 城市
     

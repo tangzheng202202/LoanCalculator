@@ -46,7 +46,7 @@ struct LoanCalculatorV2Tests {
         var input = LoanInputV2()
         input.loanType = .housingFund
         input.city = .beijing
-        input.houseArea = 90
+        input.houseArea = 30
         input.housePricePerSqm = 50000
         input.downPaymentRatio = 0.20
         input.loanTerm = 30
@@ -54,11 +54,13 @@ struct LoanCalculatorV2Tests {
         input.housingFundEnabled = true
         input.housingFundBalance = 200000  // 20万余额
         
+        #expect(input.validate())
         let result = CalculationEngineV2.calculate(input: input)
         
         // 纯公积金应该没有商贷部分
         #expect(result.commercialPrincipal == 0)
-        #expect(result.housingFundPrincipal > 0)
+        #expect(result.housingFundPrincipal == input.loanAmount)
+        #expect(result.loanAmount == result.housingFundPrincipal)
         
         // 验证利率是公积金利率
         #expect(input.housingFundRate == 0.0285 || input.housingFundRate == 0.026)
@@ -115,10 +117,11 @@ struct LoanCalculatorV2Tests {
         input.houseArea = 90
         input.housePricePerSqm = 50000  // 总价450万
         input.housingFundBalance = 100000  // 10万余额
+        input.housingFundEnabled = true
         input.spouseHousingFund = false
         
-        // 北京：余额×15倍 = 150万，但房价×70% = 315万，最高120万
-        // 所以可贷额度 = min(150万, 315万, 120万) = 120万
+        // 北京：余额×15倍 = 150万，房价×80% = 360万，政策上限120万
+        // 所以可贷额度 = min(150万, 360万, 120万) = 120万
         let expected = 1200000.0  // 120万
         #expect(abs(input.housingFundLoanable - expected) < 1)
     }
@@ -130,11 +133,125 @@ struct LoanCalculatorV2Tests {
         input.houseArea = 120
         input.housePricePerSqm = 60000  // 总价720万
         input.housingFundBalance = 50000
+        input.housingFundEnabled = true
         input.spouseHousingFund = true
         input.spouseHousingFundBalance = 50000
         
         // 合计余额10万，上海×15倍 = 150万，最高120万
-        #expect(input.housingFundLoanable > 0)
+        #expect(abs(input.housingFundLoanable - 1200000) < 1)
+    }
+
+    @Test func testHousingFundLoanable_LowBalanceAndSpouse() {
+        let city = City.beijing
+        #expect(city.calculateHousingFundLoanable(balance: 1000, housePrice: 4500000, houseType: .first) == 15000)
+        #expect(city.calculateHousingFundLoanable(balance: 1000, spouseBalance: 1000, housePrice: 4500000, houseType: .first) == 30000)
+
+        let input = LoanInputV2()
+        input.loanType = .combined
+        input.city = city
+        input.housingFundEnabled = true
+        input.housingFundBalance = 1000
+        input.spouseHousingFundBalance = 1000
+
+        // 配偶开关关闭时，输入中留存的配偶余额不应参与计算。
+        let withoutSpouse = CalculationEngineV2.calculate(input: input)
+        #expect(withoutSpouse.housingFundPrincipal == 15000)
+
+        input.spouseHousingFund = true
+        let withSpouse = CalculationEngineV2.calculate(input: input)
+        #expect(withSpouse.housingFundPrincipal == 30000)
+        #expect(withSpouse.commercialPrincipal == input.loanAmount - 30000)
+        #expect(withSpouse.housingFundPrincipal + withSpouse.commercialPrincipal == input.loanAmount)
+        #expect(input.housingFundLoanable == withSpouse.housingFundPrincipal)
+    }
+
+    @Test func testHousingFundDisabledDoesNotAllocateLoan() {
+        let input = LoanInputV2()
+        input.loanType = .combined
+        input.housingFundBalance = 50000
+        input.housingFundEnabled = false
+
+        #expect(input.housingFundLoanable == 0)
+        #expect(input.validate())
+        let combined = CalculationEngineV2.calculate(input: input)
+        #expect(combined.housingFundPrincipal == 0)
+        #expect(combined.commercialPrincipal == input.loanAmount)
+        #expect(combined.loanAmount == input.loanAmount)
+
+        input.loanType = .housingFund
+        #expect(!input.validate())
+        #expect(input.validationErrors.contains("公积金可贷额度不足以覆盖贷款金额，请提高首付或选择组合贷款"))
+        let fundOnly = CalculationEngineV2.calculate(input: input)
+        #expect(fundOnly.housingFundPrincipal == 0)
+        #expect(fundOnly.commercialPrincipal == 0)
+        #expect(fundOnly.loanAmount == 0)
+    }
+
+    @Test func testNegativeSpouseBalanceIsRejectedAndCannotAllocateNegativePrincipal() {
+        let input = LoanInputV2()
+        input.loanType = .combined
+        input.housingFundEnabled = true
+        input.housingFundBalance = 1000
+        input.spouseHousingFund = true
+        input.spouseHousingFundBalance = -2000
+
+        #expect(!input.validate())
+        #expect(input.validationErrors.contains("配偶公积金账户余额不能为负"))
+        #expect(input.housingFundLoanable == 0)
+        let result = CalculationEngineV2.calculate(input: input)
+        #expect(result.housingFundPrincipal == 0)
+        #expect(result.commercialPrincipal == input.loanAmount)
+
+        input.spouseHousingFund = false
+        #expect(input.validate())
+        #expect(input.housingFundLoanable == 15000)
+    }
+
+    @Test func testHousingFundLoan_InsufficientLimit() {
+        let input = LoanInputV2()
+        input.loanType = .housingFund
+        input.housingFundEnabled = true
+        input.housingFundBalance = 1000
+
+        #expect(input.loanAmount == 3600000)
+        #expect(input.housingFundLoanable == 15000)
+        #expect(!input.validate())
+        #expect(input.validationErrors.contains("公积金可贷额度不足以覆盖贷款金额，请提高首付或选择组合贷款"))
+
+        // 直接调用引擎时，结果也只记录实际可贷本金，不能把缺口计入节息基准。
+        let result = CalculationEngineV2.calculate(input: input)
+        let schedule = CalculationEngineV2.schedule(input: input)
+        #expect(result.housingFundPrincipal == 15000)
+        #expect(result.commercialPrincipal == 0)
+        #expect(result.loanAmount == 15000)
+        #expect(abs(result.totalPayment - result.totalInterest - result.loanAmount) < 0.01)
+        #expect(abs(schedule.reduce(0) { $0 + $1.totalPrincipal } - result.loanAmount) < 0.01)
+        #expect(schedule.last?.remainingPrincipal == 0)
+
+        let allCommercial = CalculationEngineV2.calcLoan(
+            principal: result.loanAmount,
+            annualRate: input.commercialRate,
+            months: input.loanTerm * 12,
+            method: input.repaymentMethod
+        )
+        #expect(abs(result.savedInterestIfAllCommercial - allCommercial.totalInterest) < 0.01)
+        #expect(abs(result.savedInterest - (allCommercial.totalInterest - result.totalInterest)) < 0.01)
+
+        let historyItem = HistoryManager.makeItem(input: input, result: result)
+        #expect(historyItem.loanAmount == result.loanAmount)
+        #expect(historyItem.totalPayment == result.totalPayment)
+    }
+
+    @Test func testZeroRateEqualPayment() {
+        let payment = CalculationEngineV2.calcLoan(principal: 120000, annualRate: 0, months: 12, method: .equalPayment)
+        #expect(payment.monthlyPayment == 10000)
+        #expect(payment.totalPayment == 120000)
+        #expect(payment.totalInterest == 0)
+
+        let schedule = CalculationEngineV2.generateSchedule(principal: 120000, monthlyRate: 0, months: 12, method: .equalPayment)
+        #expect(schedule.count == 12)
+        #expect(schedule.allSatisfy { $0.payment == 10000 && $0.interest == 0 })
+        #expect(schedule.last?.remaining == 0)
     }
 
     // MARK: - 等额本金测试

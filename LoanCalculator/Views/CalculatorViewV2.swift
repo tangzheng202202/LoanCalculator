@@ -42,12 +42,13 @@ struct CalculatorViewV2: View {
     private var loanAmount: Double { totalHousePrice - downPayment }
 
     private var housingFundLoanable: Double {
-        city.calculateHousingFundLoanable(
+        guard housingFundEnabled else { return 0 }
+        return max(0, city.calculateHousingFundLoanable(
             balance: housingFundBalance,
             spouseBalance: spouseHousingFund ? spouseHousingFundBalance : 0,
             housePrice: totalHousePrice,
             houseType: houseType
-        )
+        ))
     }
 
     private var commercialRate: Double {

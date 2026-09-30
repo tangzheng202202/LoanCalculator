@@ -99,7 +99,7 @@ struct ResultViewV2: View {
                 }
             }
 
-            if result.savedInterest > 0 {
+            if input.loanType == .combined && result.savedInterest > 0 {
                 HStack {
                     Image(systemName: "leaf.fill")
                         .foregroundColor(.green)

@@ -54,12 +54,13 @@ class LoanInputV2: ObservableObject {
     }
     
     var housingFundLoanable: Double {
-        city.calculateHousingFundLoanable(
+        guard housingFundEnabled else { return 0 }
+        return max(0, city.calculateHousingFundLoanable(
             balance: housingFundBalance,
             spouseBalance: spouseHousingFund ? spouseHousingFundBalance : 0,
             housePrice: totalHousePrice,
             houseType: houseType
-        )
+        ))
     }
     
     var housingFundRate: Double {
@@ -102,6 +103,14 @@ class LoanInputV2: ObservableObject {
         // 公积金余额验证
         if housingFundEnabled && housingFundBalance < 0 {
             validationErrors.append("公积金账户余额不能为负")
+        }
+        if housingFundEnabled && spouseHousingFund && spouseHousingFundBalance < 0 {
+            validationErrors.append("配偶公积金账户余额不能为负")
+        }
+
+        // 纯公积金模式不能把政策额度以外的缺口默认为已获贷款。
+        if loanType == .housingFund && loanAmount - housingFundLoanable > 0.01 {
+            validationErrors.append("公积金可贷额度不足以覆盖贷款金额，请提高首付或选择组合贷款")
         }
         
         return validationErrors.isEmpty
